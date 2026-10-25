@@ -18,7 +18,7 @@
 :root{
   --bg:#f3f5f4; --surface:#ffffff; --fg:#14201d; --muted:#5d6b67; --line:#d9e0dd;
   --accent:#0d6e5f; --accent-soft:#dcefeb; --sign:#14201d; --sign-fg:#ffc53d;
-  --good:#1f8a4c; --mid:#b07a0f; --bad:#c2412d;
+  --good:#1f8a4c; --mid:#b07a0f; --bad:#c2412d; --tl:34%;
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   color-scheme:light;
@@ -26,11 +26,11 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0f1514; --surface:#17201e; --fg:#e7eeeb; --muted:#93a39e; --line:#26332f;
   --accent:#4fc2ad; --accent-soft:#163a34; --sign:#05090a; --sign-fg:#ffc53d;
-  --good:#4cc47e; --mid:#e0a93a; --bad:#ef7a64; color-scheme:dark}}
+  --good:#4cc47e; --mid:#e0a93a; --bad:#ef7a64; --tl:64%; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f1514; --surface:#17201e; --fg:#e7eeeb; --muted:#93a39e; --line:#26332f;
   --accent:#4fc2ad; --accent-soft:#163a34; --sign:#05090a; --sign-fg:#ffc53d;
-  --good:#4cc47e; --mid:#e0a93a; --bad:#ef7a64; color-scheme:dark}
+  --good:#4cc47e; --mid:#e0a93a; --bad:#ef7a64; --tl:64%; color-scheme:dark}
 *{box-sizing:border-box}
 html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 var(--body);-webkit-text-size-adjust:100%}
@@ -78,9 +78,14 @@ label.chk{display:flex;gap:6px;align-items:center;font-size:.9rem;color:var(--mu
 .pr{text-align:right}
 .pr b{font:700 1.7rem/1 var(--display);font-variant-numeric:tabular-nums}
 .pill{display:inline-block;margin-top:4px;font-size:.72rem;font-weight:600;padding:2px 7px;border-radius:99px}
-.pill.g{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
-.pill.m{color:var(--mid);background:color-mix(in srgb,var(--mid) 14%,transparent)}
-.pill.b{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+/* Escala de precio: --h va de 130 (verde, más barata) a 0 (rojo, más cara) */
+.row{border-left:6px solid hsl(var(--h,60) 72% 46%)}
+.pr b{color:hsl(var(--h,60) 75% var(--tl))}
+.pill{color:hsl(var(--h,60) 75% var(--tl));background:hsl(var(--h,60) 75% 50% / .15)}
+.scale{display:grid;gap:4px}
+.scale .bar{height:8px;border-radius:99px;background:linear-gradient(90deg,hsl(130 72% 46%),hsl(65 80% 48%),hsl(30 85% 50%),hsl(0 72% 50%))}
+.scale .ends{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
+#sMin{color:hsl(130 75% var(--tl))} #sMax{color:hsl(0 75% var(--tl))}
 .msg{background:var(--accent-soft);border-radius:10px;padding:14px 16px;font-size:.92rem}
 .msg.err{background:color-mix(in srgb,var(--bad) 14%,var(--surface))}
 footer{font-size:.8rem;color:var(--muted)}
@@ -114,6 +119,11 @@ footer a{color:var(--accent)}
     <div class="stat"><b id="sN">–</b><span>Estaciones</span></div>
   </section>
 
+  <section class="scale" id="scale" hidden>
+    <div class="bar"></div>
+    <div class="ends"><span id="lMin">Más barata</span><span id="lMax">Más cara</span></div>
+  </section>
+
   <section class="filters">
     <input type="search" id="q" placeholder="Buscar municipio, calle o código postal (p. ej. Tres Cantos)">
     <select id="sort" aria-label="Ordenar">
@@ -142,6 +152,7 @@ let stations = [], fecha = "", me = null, nextAt = 0;
 
 const $ = id => document.getElementById(id);
 const num = s => { const v = parseFloat(String(s||"").replace(",", ".")); return isFinite(v) && v>0 ? v : null; };
+const coord = s => { const v = parseFloat(String(s||"").replace(",", ".")); return isFinite(v) ? v : null; };
 const fmt = v => v==null ? "–" : v.toFixed(3).replace(".", ",");
 const km = d => d<10 ? d.toFixed(1).replace(".", ",")+" km" : Math.round(d)+" km";
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -176,7 +187,7 @@ async function loadLive(){
     const list = (j.ListaEESSPrecio||[]).map(e=>({
       id:e.IDEESS, brand:(e["Rótulo"]||"").trim(), addr:(e["Dirección"]||"").trim(),
       town:(e["Municipio"]||"").trim(), cp:e["C.P."]||"", hours:e["Horario"]||"",
-      lat:num(e["Latitud"]), lon:num(e["Longitud (WGS84)"]), price:num(e[FIELD])
+      lat:coord(e["Latitud"]), lon:coord(e["Longitud (WGS84)"]), price:num(e[FIELD])
     })).filter(s=>s.price!=null);
     if(!list.length) throw new Error("vacío");
     return {fecha:j.Fecha||"", stations:list, src:"live", at:new Date()};
@@ -227,7 +238,11 @@ function render(){
   const prices = all.map(s=>s.price).sort((a,b)=>a-b);
   const min = prices[0], max = prices[prices.length-1];
   const avg = prices.reduce((a,b)=>a+b,0)/(prices.length||1);
-  const p33 = prices[Math.floor(prices.length/3)], p66 = prices[Math.floor(prices.length*2/3)];
+  // Tono según la posición del precio en el ranking: 130 = verde, 0 = rojo
+  const hue = p => { if(prices.length<2) return 130;
+    const lo = prices.findIndex(x=>x>=p), hi = prices.length-1-[...prices].reverse().findIndex(x=>x<=p);
+    return Math.round(130*(1-((lo+hi)/2)/(prices.length-1))); };
+  const tag = p => { const h = hue(p); return h>=95?"Muy barata":h>=65?"Barata":h>=35?"Normal":"Cara"; };
 
   const mode = $("sort").value;
   if(mode!=="price" && !me){ $("sort").value="price"; showMsg("Pulsa «Usar mi ubicación» para ordenar por cercanía."); }
@@ -249,27 +264,28 @@ function render(){
     $("signName").textContent = best.brand+" · "+best.town;
     $("signAddr").innerHTML = esc(best.addr)+" · <a target=\"_blank\" rel=\"noopener\" href=\""+mapUrl(best)+"\">Cómo llegar</a>";
     $("signPrice").innerHTML = fmt(best.price)+"<small>€/l</small>";
+    $("signPrice").style.color = `hsl(${hue(best.price)} 85% 60%)`;
+    $("scale").hidden = false;
+    $("lMin").textContent = "Más barata · "+fmt(min)+" €/l"; $("lMax").textContent = "Más cara · "+fmt(max)+" €/l";
     document.querySelector(".sign .lbl").textContent = q||me ? "Mejor opción según tus filtros" : "Más barata de la Comunidad";
   }
   $("fecha").textContent = fecha || "–";
 
   $("list").innerHTML = rows.slice(0,300).map((s,i)=>{
-    const cls = s.price<=p33 ? "g" : s.price<=p66 ? "m" : "b";
-    const tag = cls==="g" ? "Barata" : cls==="m" ? "Media" : "Cara";
     const diff = s.price-min;
-    return `<li class="row">
+    return `<li class="row" style="--h:${hue(s.price)}">
       <div class="rank">${i+1}</div>
       <div class="info">
         <div class="t">${esc(s.town)} · ${esc(s.addr)}</div>
         <div class="m">${esc(s.brand)} · ${esc(s.hours)}${s.d!=null?" · "+km(s.d):""} · <a target="_blank" rel="noopener" href="${mapUrl(s)}">Mapa</a></div>
       </div>
-      <div class="pr"><b>${fmt(s.price)}</b><br><span class="pill ${cls}">${tag}${diff>0.0005?" +"+fmt(diff):""}</span></div>
+      <div class="pr"><b>${fmt(s.price)}</b><br><span class="pill">${tag(s.price)}${diff>0.0005?" +"+fmt(diff):""}</span></div>
     </li>`;
   }).join("") || (stations.length ? `<li class="msg">Ninguna estación coincide con la búsqueda.</li>` : "");
 }
 
 function mapUrl(s){
-  return s.lat!=null ? `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`
+  return (s.lat!=null && s.lon!=null) ? `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.addr+" "+s.town)}`;
 }
 

@@ -16,6 +16,13 @@ def num(s):
         return None
 
 
+def coord(s):
+    try:
+        return float(str(s or "").replace(",", "."))
+    except ValueError:
+        return None
+
+
 def download():
     last = None
     for attempt in range(4):
@@ -42,7 +49,7 @@ for e in data.get("ListaEESSPrecio", []):
         "addr": (e.get("Dirección") or "").strip(),
         "town": (e.get("Municipio") or "").strip(),
         "cp": e.get("C.P.") or "", "hours": e.get("Horario") or "",
-        "lat": num(e.get("Latitud")), "lon": num(e.get("Longitud (WGS84)")),
+        "lat": coord(e.get("Latitud")), "lon": coord(e.get("Longitud (WGS84)")),
         "price": price,
     })
 
