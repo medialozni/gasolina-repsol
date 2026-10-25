@@ -170,9 +170,14 @@ const hhmm = d => d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"}
 
 // 1) Copia que GitHub descarga cada hora (mismo sitio, carga al instante)
 async function loadSaved(){
-  const res = await fetch("data/repsol.json?t="+Date.now(), {cache:"no-store"});
-  if(!res.ok) throw new Error("HTTP "+res.status);
-  const j = await res.json();
+  // Primero el repositorio (siempre al día), y si falla la copia de la propia web
+  const urls = ["https://raw.githubusercontent.com/medialozni/gasolina-repsol/main/data/repsol.json?t="+Date.now(),
+                "data/repsol.json?t="+Date.now()];
+  let j = null;
+  for(const u of urls){
+    try{ const res = await fetch(u, {cache:"no-store"}); if(res.ok){ j = await res.json(); break; } }catch(_){}
+  }
+  if(!j) throw new Error("sin datos");
   if(!j.stations || !j.stations.length) throw new Error("vacío");
   return {fecha:j.fecha, stations:j.stations, src:"saved", at:new Date(j.generado)};
 }
@@ -285,7 +290,8 @@ function render(){
 }
 
 function mapUrl(s){
-  return (s.lat!=null && s.lon!=null) ? `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`
+  const ok = s.lat!=null && s.lon!=null && s.lat>39 && s.lat<42 && s.lon<-2 && s.lon>-5;
+  return ok ? `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.addr+" "+s.town)}`;
 }
 
