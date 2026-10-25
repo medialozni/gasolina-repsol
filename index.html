@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Repsol 95 Madrid</title>
+<meta name="description" content="Precio de la gasolina 95 en las gasolineras Repsol de la Comunidad de Madrid, actualizado cada hora.">
+<meta name="theme-color" content="#14201d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Repsol 95">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2314201d'/%3E%3Ctext x='32' y='44' font-family='Arial' font-weight='700' font-size='30' text-anchor='middle' fill='%23ffc53d'%3E95%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: cabecera tipo poste de precios, resumen en 3 cifras, filtros, lista de estaciones ordenable */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#14201d; --muted:#5d6b67; --line:#d9e0dd;
+  --accent:#0d6e5f; --accent-soft:#dcefeb; --sign:#14201d; --sign-fg:#ffc53d;
+  --good:#1f8a4c; --mid:#b07a0f; --bad:#c2412d;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1514; --surface:#17201e; --fg:#e7eeeb; --muted:#93a39e; --line:#26332f;
+  --accent:#4fc2ad; --accent-soft:#163a34; --sign:#05090a; --sign-fg:#ffc53d;
+  --good:#4cc47e; --mid:#e0a93a; --bad:#ef7a64; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1514; --surface:#17201e; --fg:#e7eeeb; --muted:#93a39e; --line:#26332f;
+  --accent:#4fc2ad; --accent-soft:#163a34; --sign:#05090a; --sign-fg:#ffc53d;
+  --good:#4cc47e; --mid:#e0a93a; --bad:#ef7a64; color-scheme:dark}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 var(--body);-webkit-text-size-adjust:100%}
+.wrap{max-width:860px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:18px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+h1{font:700 2.1rem/1 var(--display);letter-spacing:.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:.92rem;margin-top:4px}
+.status{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.ok{background:var(--good)} .dot.err{background:var(--bad)} .dot.load{background:var(--mid);animation:p 1s infinite alternate}
+@keyframes p{to{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.dot.load{animation:none}}
+button{font:600 .9rem var(--body);border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;padding:8px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+
+/* Poste de precio: la estación más barata */
+.sign{background:var(--sign);color:#fff;border-radius:12px;padding:16px 18px;display:grid;grid-template-columns:1fr auto;gap:6px 16px;align-items:center}
+.sign .lbl{font:600 .75rem var(--body);letter-spacing:.12em;text-transform:uppercase;color:#b9c4c1}
+.sign .name{font:600 1.15rem/1.2 var(--display);letter-spacing:.02em;min-width:0}
+.sign .addr{font-size:.85rem;color:#b9c4c1;min-width:0}
+.sign .price{grid-row:1/span 3;grid-column:2;font:700 3.4rem/1 var(--display);color:var(--sign-fg);font-variant-numeric:tabular-nums;text-align:right}
+.sign .price small{font-size:1rem;color:#b9c4c1;margin-left:2px}
+.sign a{color:var(--sign-fg)}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat b{display:block;font:700 1.5rem/1.1 var(--display);font-variant-numeric:tabular-nums}
+.stat span{font-size:.75rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}.sign .price{font-size:2.7rem}}
+
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.filters input[type=search]{flex:1 1 220px;min-width:0;font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)}
+select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg)}
+label.chk{display:flex;gap:6px;align-items:center;font-size:.9rem;color:var(--muted)}
+
+.list{display:grid;gap:8px;list-style:none;margin:0;padding:0}
+.row{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:2.2rem 1fr auto;gap:4px 12px;align-items:center}
+.rank{font:600 1rem var(--display);color:var(--muted);font-variant-numeric:tabular-nums}
+.info{min-width:0}
+.info .t{font-weight:600;overflow-wrap:anywhere}
+.info .m{font-size:.85rem;color:var(--muted);overflow-wrap:anywhere}
+.info .m a{color:var(--accent)}
+.pr{text-align:right}
+.pr b{font:700 1.7rem/1 var(--display);font-variant-numeric:tabular-nums}
+.pill{display:inline-block;margin-top:4px;font-size:.72rem;font-weight:600;padding:2px 7px;border-radius:99px}
+.pill.g{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
+.pill.m{color:var(--mid);background:color-mix(in srgb,var(--mid) 14%,transparent)}
+.pill.b{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.msg{background:var(--accent-soft);border-radius:10px;padding:14px 16px;font-size:.92rem}
+.msg.err{background:color-mix(in srgb,var(--bad) 14%,var(--surface))}
+footer{font-size:.8rem;color:var(--muted)}
+footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Repsol · Gasolina 95 · Madrid</h1>
+      <div class="sub">Precios oficiales del Ministerio en €/litro. Se actualiza solo cada hora.</div>
+    </div>
+    <div class="status">
+      <span class="dot" id="dot"></span><span id="statusTxt">Cargando…</span>
+      <button class="primary" id="refresh">Actualizar</button>
+    </div>
+  </header>
+
+  <section class="sign" id="sign" hidden>
+    <div class="lbl">Más barata ahora</div>
+    <div class="name" id="signName"></div>
+    <div class="addr" id="signAddr"></div>
+    <div class="price" id="signPrice"></div>
+  </section>
+
+  <section class="stats" id="stats" hidden>
+    <div class="stat"><b id="sMin">–</b><span>Mínimo</span></div>
+    <div class="stat"><b id="sAvg">–</b><span>Media</span></div>
+    <div class="stat"><b id="sMax">–</b><span>Máximo</span></div>
+    <div class="stat"><b id="sN">–</b><span>Estaciones</span></div>
+  </section>
+
+  <section class="filters">
+    <input type="search" id="q" placeholder="Buscar municipio, calle o código postal (p. ej. Tres Cantos)">
+    <select id="sort" aria-label="Ordenar">
+      <option value="price">Más barata primero</option>
+      <option value="dist">Más cercana primero</option>
+      <option value="value">Mejor relación precio/distancia</option>
+    </select>
+    <button id="geo">Usar mi ubicación</button>
+    <label class="chk"><input type="checkbox" id="group"> Incluir Campsa y Petronor</label>
+  </section>
+
+  <div id="msg" class="msg" hidden></div>
+  <ul class="list" id="list"></ul>
+
+  <footer>
+    Fuente: Geoportal de Gasolineras, Ministerio para la Transición Ecológica (API pública). Datos del Ministerio: <span id="fecha">–</span>.
+    Próxima actualización en <span id="countdown">–</span>.
+  </footer>
+</div>
+
+<script>
+const API = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/FiltroCCAA/13";
+const HOUR = 60*60*1000;
+const FIELD = "Precio Gasolina 95 E5";
+let stations = [], fecha = "", me = null, nextAt = 0;
+
+const $ = id => document.getElementById(id);
+const num = s => { const v = parseFloat(String(s||"").replace(",", ".")); return isFinite(v) && v>0 ? v : null; };
+const fmt = v => v==null ? "–" : v.toFixed(3).replace(".", ",");
+const km = d => d<10 ? d.toFixed(1).replace(".", ",")+" km" : Math.round(d)+" km";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function dist(a,b){
+  const R=6371, r=x=>x*Math.PI/180;
+  const dLa=r(b.lat-a.lat), dLo=r(b.lon-a.lon);
+  const h=Math.sin(dLa/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+function setStatus(kind, txt){ $("dot").className = "dot "+kind; $("statusTxt").textContent = txt; }
+
+const hhmm = d => d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"});
+
+// 1) Copia que GitHub descarga cada hora (mismo sitio, carga al instante)
+async function loadSaved(){
+  const res = await fetch("data/repsol.json?t="+Date.now(), {cache:"no-store"});
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  const j = await res.json();
+  if(!j.stations || !j.stations.length) throw new Error("vacío");
+  return {fecha:j.fecha, stations:j.stations, src:"saved", at:new Date(j.generado)};
+}
+
+// 2) Precios en vivo directamente del Ministerio (si el navegador lo permite)
+async function loadLive(){
+  const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 15000);
+  try{
+    const res = await fetch(API, {headers:{Accept:"application/json"}, cache:"no-store", signal:ctl.signal});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const j = await res.json();
+    const list = (j.ListaEESSPrecio||[]).map(e=>({
+      id:e.IDEESS, brand:(e["Rótulo"]||"").trim(), addr:(e["Dirección"]||"").trim(),
+      town:(e["Municipio"]||"").trim(), cp:e["C.P."]||"", hours:e["Horario"]||"",
+      lat:num(e["Latitud"]), lon:num(e["Longitud (WGS84)"]), price:num(e[FIELD])
+    })).filter(s=>s.price!=null);
+    if(!list.length) throw new Error("vacío");
+    return {fecha:j.Fecha||"", stations:list, src:"live", at:new Date()};
+  } finally { clearTimeout(t); }
+}
+
+function apply(d){
+  fecha = d.fecha; stations = d.stations;
+  try{ localStorage.setItem("repsol95", JSON.stringify(d)); }catch(_){}
+  setStatus("ok", (d.src==="live" ? "En vivo · " : "Actualizado · ") + hhmm(d.at));
+  $("msg").hidden = true;
+  render();
+}
+
+async function load(){
+  setStatus("load","Cargando precios…");
+  let ok = false;
+  try{ apply(await loadSaved()); ok = true; }catch(_){}
+  try{ apply(await loadLive()); ok = true; }catch(_){}
+  if(!ok){
+    let cached = null;
+    try{ cached = JSON.parse(localStorage.getItem("repsol95")||"null"); }catch(_){}
+    if(cached && !stations.length){ fecha = cached.fecha; stations = cached.stations; }
+    setStatus("err","Sin conexión");
+    showMsg(stations.length
+      ? "No hay conexión. Mostrando los últimos precios guardados en este móvil."
+      : "No se han podido cargar los precios. Comprueba la conexión y pulsa Actualizar.", true);
+    render();
+  }
+  nextAt = Date.now()+HOUR;
+}
+
+function showMsg(t, err){ const m=$("msg"); m.textContent=t; m.className="msg"+(err?" err":""); m.hidden=false; }
+
+function isBrand(s){
+  const b = s.brand.toUpperCase();
+  if(b.includes("REPSOL")) return true;
+  return $("group").checked && (b.includes("CAMPSA") || b.includes("PETRONOR"));
+}
+
+function render(){
+  const q = $("q").value.trim().toLowerCase();
+  let rows = stations.filter(isBrand);
+  const all = rows;
+  if(q) rows = rows.filter(s => (s.town+" "+s.addr+" "+s.cp+" "+s.brand).toLowerCase().includes(q));
+  if(me) rows.forEach(s => s.d = (s.lat!=null&&s.lon!=null) ? dist(me,s) : null);
+
+  const prices = all.map(s=>s.price).sort((a,b)=>a-b);
+  const min = prices[0], max = prices[prices.length-1];
+  const avg = prices.reduce((a,b)=>a+b,0)/(prices.length||1);
+  const p33 = prices[Math.floor(prices.length/3)], p66 = prices[Math.floor(prices.length*2/3)];
+
+  const mode = $("sort").value;
+  if(mode!=="price" && !me){ $("sort").value="price"; showMsg("Pulsa «Usar mi ubicación» para ordenar por cercanía."); }
+  const m = $("sort").value;
+  rows.sort((a,b)=>{
+    if(m==="dist") return (a.d??1e9)-(b.d??1e9);
+    if(m==="value"){ // coste estimado de un depósito de 50 l + ida y vuelta (6,5 l/100 km)
+      const c = s => s.price*50 + (s.d??1e3)*2*0.065*s.price;
+      return c(a)-c(b);
+    }
+    return a.price-b.price || (a.d??0)-(b.d??0);
+  });
+
+  $("stats").hidden = $("sign").hidden = !all.length;
+  if(all.length){
+    $("sMin").textContent = fmt(min); $("sAvg").textContent = fmt(avg);
+    $("sMax").textContent = fmt(max); $("sN").textContent = all.length;
+    const best = (q||me) && rows.length ? rows[0] : all.slice().sort((a,b)=>a.price-b.price)[0];
+    $("signName").textContent = best.brand+" · "+best.town;
+    $("signAddr").innerHTML = esc(best.addr)+" · <a target=\"_blank\" rel=\"noopener\" href=\""+mapUrl(best)+"\">Cómo llegar</a>";
+    $("signPrice").innerHTML = fmt(best.price)+"<small>€/l</small>";
+    document.querySelector(".sign .lbl").textContent = q||me ? "Mejor opción según tus filtros" : "Más barata de la Comunidad";
+  }
+  $("fecha").textContent = fecha || "–";
+
+  $("list").innerHTML = rows.slice(0,300).map((s,i)=>{
+    const cls = s.price<=p33 ? "g" : s.price<=p66 ? "m" : "b";
+    const tag = cls==="g" ? "Barata" : cls==="m" ? "Media" : "Cara";
+    const diff = s.price-min;
+    return `<li class="row">
+      <div class="rank">${i+1}</div>
+      <div class="info">
+        <div class="t">${esc(s.town)} · ${esc(s.addr)}</div>
+        <div class="m">${esc(s.brand)} · ${esc(s.hours)}${s.d!=null?" · "+km(s.d):""} · <a target="_blank" rel="noopener" href="${mapUrl(s)}">Mapa</a></div>
+      </div>
+      <div class="pr"><b>${fmt(s.price)}</b><br><span class="pill ${cls}">${tag}${diff>0.0005?" +"+fmt(diff):""}</span></div>
+    </li>`;
+  }).join("") || (stations.length ? `<li class="msg">Ninguna estación coincide con la búsqueda.</li>` : "");
+}
+
+function mapUrl(s){
+  return s.lat!=null ? `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.addr+" "+s.town)}`;
+}
+
+$("geo").onclick = ()=>{
+  if(!navigator.geolocation){ showMsg("Este navegador no permite la ubicación. Filtra por municipio.", true); return; }
+  $("geo").textContent = "Localizando…";
+  navigator.geolocation.getCurrentPosition(p=>{
+    me = {lat:p.coords.latitude, lon:p.coords.longitude};
+    $("geo").textContent = "Ubicación activa"; $("sort").value = "dist"; $("msg").hidden = true; render();
+  }, ()=>{ $("geo").textContent = "Usar mi ubicación"; showMsg("No se ha podido obtener la ubicación. Revisa los permisos o filtra por municipio.", true); },
+  {enableHighAccuracy:false, timeout:10000, maximumAge:600000});
+};
+$("q").oninput = render;
+$("sort").onchange = render;
+$("group").onchange = render;
+$("refresh").onclick = load;
+
+setInterval(()=>{
+  const left = nextAt-Date.now();
+  if(left<=0){ load(); return; }
+  const mm = Math.floor(left/60000), ss = Math.floor(left/1000)%60;
+  $("countdown").textContent = mm+" min "+String(ss).padStart(2,"0")+" s";
+}, 1000);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && Date.now()>nextAt) load(); });
+
+load();
+</script>
+</body>
+</html>
