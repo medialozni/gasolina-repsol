@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
 
 jobs:
   actualizar:
@@ -25,3 +26,9 @@ jobs:
           git add data/repsol.json
           git diff --cached --quiet || git commit -m "Precios $(date -u +%Y-%m-%dT%H:%MZ)"
           git push
+      - name: Republicar la web
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || true
