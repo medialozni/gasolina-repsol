@@ -25,16 +25,19 @@ def coord(s):
 
 def download():
     last = None
-    for attempt in range(4):
+    for attempt in range(3):
         try:
             req = urllib.request.Request(URL, headers={
                 "Accept": "application/json", "User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=60) as r:
+            with urllib.request.urlopen(req, timeout=45) as r:
                 return json.load(r)
         except Exception as e:  # noqa: BLE001
             last = e
-            time.sleep(10 * (attempt + 1))
-    raise SystemExit(f"No se pudo descargar: {last}")
+            time.sleep(15)
+    # El Ministerio a veces no responde: se conservan los últimos precios
+    # y se termina sin error para no generar avisos por correo.
+    print(f"::warning::El Ministerio no respondió ({last}). Se mantienen los precios anteriores.")
+    sys.exit(0)
 
 
 data = download()
@@ -54,7 +57,8 @@ for e in data.get("ListaEESSPrecio", []):
     })
 
 if not out:
-    sys.exit("Respuesta vacía; se mantiene el archivo anterior.")
+    print("::warning::Respuesta vacía. Se mantienen los precios anteriores.")
+    sys.exit(0)
 
 with open("data/repsol.json", "w", encoding="utf-8") as f:
     json.dump({"fecha": data.get("Fecha", ""),
