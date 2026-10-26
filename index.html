@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Repsol 95 Madrid</title>
-<meta name="description" content="Precio de la gasolina 95 en las gasolineras Repsol de la Comunidad de Madrid, actualizado cada hora.">
+<title>Repsol 95</title>
+<meta name="description" content="Precio de la gasolina 95 en las gasolineras Repsol de Madrid, Yecla y Alicante, actualizado cada hora.">
 <meta name="theme-color" content="#14201d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -86,6 +86,16 @@ label.chk{display:flex;gap:6px;align-items:center;font-size:.9rem;color:var(--mu
 .scale .bar{height:8px;border-radius:99px;background:linear-gradient(90deg,hsl(130 72% 46%),hsl(65 80% 48%),hsl(30 85% 50%),hsl(0 72% 50%))}
 .scale .ends{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
 #sMin{color:hsl(130 75% var(--tl))} #sMax{color:hsl(0 75% var(--tl))}
+/* Paneles de zona */
+.zones{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.zone{display:grid;gap:2px;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface);min-width:0}
+.zone .zn{font:700 1.25rem/1.1 var(--display);letter-spacing:.01em}
+.zone .zs{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.zone .zp{font:600 .9rem var(--body);font-variant-numeric:tabular-nums;color:hsl(130 75% var(--tl));margin-top:4px}
+.zone[aria-pressed="true"]{background:var(--sign);border-color:var(--sign);color:#fff}
+.zone[aria-pressed="true"] .zs{color:#b9c4c1}
+.zone[aria-pressed="true"] .zp{color:hsl(130 70% 62%)}
+@media (max-width:420px){.zone{padding:9px 10px}.zone .zn{font-size:1.1rem}}
 .msg{background:var(--accent-soft);border-radius:10px;padding:14px 16px;font-size:.92rem}
 .msg.err{background:color-mix(in srgb,var(--bad) 14%,var(--surface))}
 footer{font-size:.8rem;color:var(--muted)}
@@ -96,14 +106,20 @@ footer a{color:var(--accent)}
 <div class="wrap">
   <header>
     <div>
-      <h1>Repsol · Gasolina 95 · Madrid</h1>
-      <div class="sub">Precios oficiales del Ministerio en €/litro. Se actualiza solo cada hora.</div>
+      <h1>Repsol · Gasolina 95</h1>
+      <div class="sub">Precios oficiales del Ministerio en €/litro. Se actualizan solos cada hora.</div>
     </div>
     <div class="status">
       <span class="dot" id="dot"></span><span id="statusTxt">Cargando…</span>
       <button class="primary" id="refresh">Actualizar</button>
     </div>
   </header>
+
+  <nav class="zones" id="zones" aria-label="Zona">
+    <button class="zone" data-zone="madrid" aria-pressed="true"><span class="zn">Madrid</span><span class="zs">Comunidad</span><b class="zp">–</b></button>
+    <button class="zone" data-zone="yecla" aria-pressed="false"><span class="zn">Yecla</span><span class="zs">Murcia</span><b class="zp">–</b></button>
+    <button class="zone" data-zone="alicante" aria-pressed="false"><span class="zn">Alicante</span><span class="zs">Provincia</span><b class="zp">–</b></button>
+  </nav>
 
   <section class="sign" id="sign" hidden>
     <div class="lbl">Más barata ahora</div>
@@ -125,7 +141,7 @@ footer a{color:var(--accent)}
   </section>
 
   <section class="filters">
-    <input type="search" id="q" placeholder="Buscar municipio, calle o código postal (p. ej. Tres Cantos)">
+    <input type="search" id="q" placeholder="Buscar municipio, calle o código postal">
     <select id="sort" aria-label="Ordenar">
       <option value="price">Más barata primero</option>
       <option value="dist">Más cercana primero</option>
@@ -149,6 +165,9 @@ const API = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/Pr
 const HOUR = 60*60*1000;
 const FIELD = "Precio Gasolina 95 E5";
 let stations = [], fecha = "", me = null, nextAt = 0;
+const ZONES = {madrid:"de la Comunidad de Madrid", yecla:"de Yecla", alicante:"de la provincia de Alicante"};
+let zone = "madrid";
+try{ const z = localStorage.getItem("repsol95-zona"); if(ZONES[z]) zone = z; }catch(_){}
 
 const $ = id => document.getElementById(id);
 const num = s => { const v = parseFloat(String(s||"").replace(",", ".")); return isFinite(v) && v>0 ? v : null; };
@@ -182,27 +201,10 @@ async function loadSaved(){
   return {fecha:j.fecha, stations:j.stations, src:"saved", at:new Date(j.generado)};
 }
 
-// 2) Precios en vivo directamente del Ministerio (si el navegador lo permite)
-async function loadLive(){
-  const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 15000);
-  try{
-    const res = await fetch(API, {headers:{Accept:"application/json"}, cache:"no-store", signal:ctl.signal});
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    const j = await res.json();
-    const list = (j.ListaEESSPrecio||[]).map(e=>({
-      id:e.IDEESS, brand:(e["Rótulo"]||"").trim(), addr:(e["Dirección"]||"").trim(),
-      town:(e["Municipio"]||"").trim(), cp:e["C.P."]||"", hours:e["Horario"]||"",
-      lat:coord(e["Latitud"]), lon:coord(e["Longitud (WGS84)"]), price:num(e[FIELD])
-    })).filter(s=>s.price!=null);
-    if(!list.length) throw new Error("vacío");
-    return {fecha:j.Fecha||"", stations:list, src:"live", at:new Date()};
-  } finally { clearTimeout(t); }
-}
-
 function apply(d){
   fecha = d.fecha; stations = d.stations;
   try{ localStorage.setItem("repsol95", JSON.stringify(d)); }catch(_){}
-  setStatus("ok", (d.src==="live" ? "En vivo · " : "Actualizado · ") + hhmm(d.at));
+  setStatus("ok", "Actualizado · " + hhmm(d.at));
   $("msg").hidden = true;
   render();
 }
@@ -211,7 +213,6 @@ async function load(){
   setStatus("load","Cargando precios…");
   let ok = false;
   try{ apply(await loadSaved()); ok = true; }catch(_){}
-  try{ apply(await loadLive()); ok = true; }catch(_){}
   if(!ok){
     let cached = null;
     try{ cached = JSON.parse(localStorage.getItem("repsol95")||"null"); }catch(_){}
@@ -235,7 +236,13 @@ function isBrand(s){
 
 function render(){
   const q = $("q").value.trim().toLowerCase();
-  let rows = stations.filter(isBrand);
+  // Precio más bajo de cada zona en su panel
+  document.querySelectorAll(".zone").forEach(b=>{
+    const z = b.dataset.zone, ps = stations.filter(s=>(s.zone||"madrid")===z && isBrand(s)).map(s=>s.price);
+    b.setAttribute("aria-pressed", z===zone);
+    b.querySelector(".zp").textContent = ps.length ? "desde "+fmt(Math.min(...ps))+" €" : "–";
+  });
+  let rows = stations.filter(s => (s.zone||"madrid")===zone && isBrand(s));
   const all = rows;
   if(q) rows = rows.filter(s => (s.town+" "+s.addr+" "+s.cp+" "+s.brand).toLowerCase().includes(q));
   if(me) rows.forEach(s => s.d = (s.lat!=null&&s.lon!=null) ? dist(me,s) : null);
@@ -272,7 +279,7 @@ function render(){
     $("signPrice").style.color = `hsl(${hue(best.price)} 85% 60%)`;
     $("scale").hidden = false;
     $("lMin").textContent = "Más barata · "+fmt(min)+" €/l"; $("lMax").textContent = "Más cara · "+fmt(max)+" €/l";
-    document.querySelector(".sign .lbl").textContent = q||me ? "Mejor opción según tus filtros" : "Más barata de la Comunidad";
+    document.querySelector(".sign .lbl").textContent = q||me ? "Mejor opción según tus filtros" : "Más barata "+ZONES[zone];
   }
   $("fecha").textContent = fecha || "–";
 
@@ -290,7 +297,7 @@ function render(){
 }
 
 function mapUrl(s){
-  const ok = s.lat!=null && s.lon!=null && s.lat>39 && s.lat<42 && s.lon<-2 && s.lon>-5;
+  const ok = s.lat!=null && s.lon!=null && s.lat>35 && s.lat<44 && s.lon<5 && s.lon>-10;
   return ok ? `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.addr+" "+s.town)}`;
 }
@@ -304,6 +311,11 @@ $("geo").onclick = ()=>{
   }, ()=>{ $("geo").textContent = "Usar mi ubicación"; showMsg("No se ha podido obtener la ubicación. Revisa los permisos o filtra por municipio.", true); },
   {enableHighAccuracy:false, timeout:10000, maximumAge:600000});
 };
+document.querySelectorAll(".zone").forEach(b => b.onclick = ()=>{
+  zone = b.dataset.zone; $("q").value = "";
+  try{ localStorage.setItem("repsol95-zona", zone); }catch(_){}
+  render(); window.scrollTo({top:0, behavior:"smooth"});
+});
 $("q").oninput = render;
 $("sort").onchange = render;
 $("group").onchange = render;
